@@ -2,6 +2,8 @@ import { Scene } from "three";
 import { PerspectiveCamera } from "three";
 import { WebGLRenderer } from "three";
 import { BoxGeometry, MeshBasicMaterial, Mesh } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import Model from "./assets/cube.glb";
 
 const scene = new Scene();
 const camera = new PerspectiveCamera(
@@ -10,23 +12,26 @@ const camera = new PerspectiveCamera(
   0.1,
   1000
 );
-const renderer = new WebGLRenderer();
+const renderer = new WebGLRenderer({alpha: true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+const loader = new GLTFLoader();
 
-const geometry = new BoxGeometry();
-const material = new MeshBasicMaterial({ color: 0x00ff00 });
-const cube = new Mesh(geometry, material);
-scene.add(cube);
+loader.load(
+  Model,
+  (gltf) => {
+    scene.add(gltf.scene);
+  },
+  undefined,
+  (error) => {
+    console.error(error);
+  }
+);
 
 camera.position.z = 5;
 
 const animate = () => {
   requestAnimationFrame(animate);
-
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.01;
-
   renderer.render(scene, camera);
 };
 
