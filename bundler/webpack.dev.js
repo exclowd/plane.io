@@ -10,5 +10,6 @@ module.exports = merge(common, {
       "Access-Control-Allow-Origin": "*",
     },
     contentBase: path.join(__dirname, "dist"),
+    https: false,
   },
 });
