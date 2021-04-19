@@ -7,6 +7,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Water } from "three/examples/jsm/objects/Water.js";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import GroundModel from "./assets/models/ground.glb";
+import CabinModel from "./assets/models/cabin/Cabin.gltf"
 import WaterNormal from "./assets/textures/water_normal.jpg";
 import * as THREE from "three";
 
@@ -31,11 +32,13 @@ scene.add(light2);
 const loader = new GLTFLoader();
 
 loader.load(
-  GroundModel,
+  CabinModel,
   (gltf) => {
     scene.add(gltf.scene);
-    gltf.scene.scale.multiplyScalar(4);
-    gltf.position.set(0, 0, 0);
+    gltf.scene.scale.multiplyScalar(40);
+    console.log("Hi")
+    console.log(gltf)
+    gltf.scene.position.set(0, 0, 0);
   },
   undefined,
   (error) => {
