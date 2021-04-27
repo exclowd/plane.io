@@ -1,9 +1,10 @@
 import { Quaternion, Vector3 } from "three";
 import { AnimationMixer } from "three";
 import { keys } from "./input.js";
-
+import {Ray} from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import PlaneModel from "./assets/models/airplane/Enemy_Plane.glb";
+import { readSync } from "fs";
 
 const loader = new GLTFLoader();
 
@@ -35,6 +36,9 @@ export class Plane {
   load() {
     if (planeObject) {
       this.obj = planeObject.clone();
+      this.obj.position.copy(this.position);
+      this.obj.rotateY(Math.PI);
+      this.aR = this.obj.quaternion;
       this.start();
     } else {
       loader.load(
@@ -44,8 +48,9 @@ export class Plane {
           planeObject = object;
           this.animations = gltf.animations;
           this.obj = planeObject.clone();
-          this.obj.position.copy(this.position)
+          this.obj.position.copy(this.position);
           this.obj.rotateY(Math.PI);
+          this.aR.copy(this.obj.quaternion);
           this.start();
         },
         (xhr) => {
@@ -63,40 +68,58 @@ export class Plane {
     this.mixer = new AnimationMixer(this.obj);
     const clips = this.animations || [];
     clips.forEach((clip) => {
-      this.mixer.clipAction(clip).reset().play();
+      if (clip.name != "roll") {
+        this.mixer.clipAction(clip).reset().play();
+      }
     });
     this.state.active = true;
     this.parent.add(this.obj);
+  }
+
+  check_collision() {
+    
   }
 
   // keep movement and rotation different
   // * movement would be strafing and forward speed is constant
   // * rotation would only be when we are moving
   // * when one is done moving the plane would rotate towards the base forward axis
-  update(dt) {
+  
+  update_position(dt) {
     if (!this.state.active) return;
     this.mixer && this.mixer.update(dt);
     const dx = this.speed.x * dt;
     const dy = this.speed.y * dt;
     const dz = this.speed.z * dt;
+    let suc = 0;
     if (keys["ArrowLeft"]) {
-      // console.log('hi')
+      suc = 1;
       this.obj.translateX(dx);
-      // this.obj.rotateY();
+      this.obj.rotateZ(-0.01);
     }
     if (keys["ArrowUp"]) {
+      suc = 1;
       this.obj.translateY(dy);
-      // plane.rotation.x +=.
+      this.obj.rotateX(0.03);
     }
     if (keys["ArrowRight"]) {
+      suc = 1;
       this.obj.translateX(-dx);
-      // plane.rotation.y += 0.05;
-      // plane.rotation.z += 0.05;
+      this.obj.rotateZ(0.01);
     }
     if (keys["ArrowDown"]) {
+      suc = 1;
       this.obj.translateY(-dy);
-      // plane.rotation.x -= 0.05;
+      this.obj.rotateX(-0.03);
+    }
+    if (!suc) {
+      this.obj.quaternion.slerp(this.aR, 0.05);
     }
     this.obj.translateZ(dz);
+  }
+  
+  
+  update(dt) {
+    
   }
 }
