@@ -14,9 +14,9 @@ import {
   FogExp2,
   AmbientLight,
   PlaneBufferGeometry,
-  MeshLambertMaterial,
-  BoxHelper,
-  Box3Helper,
+  Geometry,
+  Raycaster,
+  ArrowHelper,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { ConvexObjectBreaker } from "three/examples/jsm/misc/ConvexObjectBreaker";
@@ -59,7 +59,7 @@ const composer = new EffectComposer(renderer);
 camera.position.set(0, 0, 0);
 camera.lookAt(0, 0, -1000);
 
-import PlaneModel from "./assets/models/airplane/Enemy_Plane2.glb";
+import PlaneModel from "./assets/models/airplane/Enemy_Plane_box.glb";
 import BulletModel from "./assets/models/bullet/bullet.glb";
 
 /**
@@ -88,8 +88,12 @@ class Plane {
         this.animations = gltf.animations;
         this.obj = object.clone();
         this.obj.position.copy(this.position);
+        console.log(`this.obj`, this.obj);
         // this.obj.rotateY(Math.PI);
         this.aR.copy(this.obj.quaternion);
+        // this.obj.children[0].visible = false;
+        this.box = this.obj.children[0];
+        console.log(`this.obj`, this.obj);
         this.start();
       },
       (xhr) => {
@@ -124,15 +128,10 @@ class Plane {
       }
     });
     this.state.active = true;
-    const box = new BoxHelper(this.obj.children[0].children[1], 0xffff00);
-    this.parent.add(box);
     this.parent.add(this.obj);
   }
 
   shoot_bullet() {}
-
-  check_collision() {}
-
   // keep movement and rotation different
   // * movement would be strafing and forward speed is constant
   // * rotation would only be when we are moving
@@ -153,7 +152,7 @@ class Plane {
     if (keys["ArrowUp"]) {
       suc = 1;
       this.obj.translateY(dy);
-      this.obj.rotateX(-0.03);
+      this.obj.rotateX(0.03);
     }
     if (keys["ArrowRight"]) {
       suc = 1;
@@ -163,7 +162,7 @@ class Plane {
     if (keys["ArrowDown"]) {
       suc = 1;
       this.obj.translateY(-dy);
-      this.obj.rotateX(0.03);
+      this.obj.rotateX(-0.03);
     }
     if (!suc) {
       this.obj.quaternion.slerp(this.aR, 0.05);
@@ -206,7 +205,7 @@ class LevelOne {
     // this.light2.position.set(5, 10, 7.5);
     this.scene.add(this.light);
     // this.scene.add(this.light2);
-
+    this.collidableMeshList = [];
     // composer settings
     this.renderPass = new RenderPass(this.scene, camera);
     composer.addPass(this.renderPass);
@@ -221,10 +220,11 @@ class LevelOne {
     this.plane = new Plane(
       this.scene,
       new Vector3(0, 0, 0),
-      new Vector3(12, 12, 48)
+      new Vector3(12, 12, 24)
     );
 
     this.update.bind(this);
+    this.check_collision.bind(this);
   }
 
   load() {
@@ -234,8 +234,6 @@ class LevelOne {
       (gltf) => {
         const group = gltf.scene || gltf.scenes[0];
         this.obj = group.clone();
-        // this.obj.position.add(new Vector3(0, 0, -1000));
-        console.log(this.obj);
         this.start();
       },
       (xhr) => {
@@ -249,9 +247,54 @@ class LevelOne {
 
   start() {
     this.state.active = true;
-    console.log(`this.obj`, this.obj)
+    this.collidableMeshList = this.obj.children.filter((mesh, index, arr) => {
+      return mesh.name !== "tunnel" || mesh.name != "Plane";
+    });
+    console.log(`this.collidableMeshList`, this.collidableMeshList);
     // I would want to defer this so as to save memory
     this.scene.add(this.obj);
+  }
+
+  check_collision() {
+    if (this.plane.box == undefined) {
+      return;
+    }
+
+    let temp = this.plane.box.geometry.attributes.position.array;
+    let vertices = [];
+    for (let i = 0; i < temp.length; i += 3) {
+      vertices.push({ x: temp[i], y: temp[i + 1], z: temp[i + 2] });
+    }
+    temp = this.plane.box.geometry.attributes.normal.array;
+    for (let i = 0; i < temp.length; i += 3) {
+      vertices.push({ x: temp[i], y: temp[i + 1], z: temp[i + 2] });
+    }
+    const raycaster = new Raycaster();
+    raycaster.near = 0;
+    raycaster.far = 10;
+    let obj = [];
+    for (let x of vertices) {
+      let local = new Vector3(x.x, x.y, x.z);
+      let global = local.clone();
+      global.applyMatrix4(this.plane.obj.matrix);
+      let dir = global.sub(this.plane.obj.position).clone().normalize();
+      raycaster.set(this.plane.obj.position, dir);
+      let collisionResults = raycaster.intersectObjects(
+        this.collidableMeshList,
+        true
+      );
+      if (collisionResults.length > 0) {
+        collisionResults.forEach((result) => {
+          if (result.distance < 0.4) {
+            obj.push(result.object);
+          }
+        });
+      }
+    }
+    let unique = [...new Set(obj)];
+    unique.forEach((object) => {
+      console.log(`object`, object)
+    })
   }
 
   update(dt) {
@@ -261,36 +304,51 @@ class LevelOne {
 
     // Update plane postion and rotation
     this.plane.update(dt);
-    if (this.plane.state.active && this.plane.obj.position.z <= -2000) {
-      this.end();
-      return;
+
+    if (this.plane.state.active) {
+      // if (this.plane.obj.position.z >= -50) {
+      //   this.glitchPass.goWild = true;
+      // } else
+      if (this.plane.obj.position.z <= -2000) {
+        this.end();
+        return;
+      }
+      //  else if (this.plane.obj.position.z <= -1900) {
+      //   this.glitchPass.goWild = true;
+      // } else {
+      //   this.glitchPass.goWild = false;
+      // }
     }
     // Update the objects position
-    let ufoSpeed = 12; 
-    let objSpeed = 6;
+    let ufoSpeed = 12;
+    let objSpeed = 1;
     this.obj.children.forEach((mesh) => {
-      if (!mesh.name.startsWith("battery") && mesh.name != "tunnel") {
-        if (
-          mesh.name.startsWith("ufo") &&
-          mesh.position.distanceTo(this.plane.obj.position) < 300
-        ) {
-          mesh.position.lerp(this.plane.obj.position, dt/ 4);
-        } else if (mesh.name !== 'Plane') {
+      if (!mesh.name.startsWith("battery") && mesh.name !== "tunnel") {
+        if (mesh.name.startsWith("ufo")) {
+          if (mesh.position.distanceTo(this.plane.obj.position) < 200) {
+            mesh.position.lerp(this.plane.obj.position, dt / 5);
+          }
+        } else if (mesh.name !== "Plane") {
           mesh.position.add(new Vector3(0, 0, dt * objSpeed));
         }
+      } else if (mesh.name === "tunnel") {
+        mesh.rotateZ(dt / 4);
       }
     });
 
     // Do collision logic
+    this.check_collision();
 
     // Update Camera position
     if (this.plane.state.active) {
-      camera.position.addVectors(this.plane.obj.position, new Vector3(0, 2, 6));
+      camera.position.addVectors(
+        this.plane.obj.position,
+        new Vector3(0, 0, 12)
+      );
     }
   }
 
   end() {
-    console.log("hi");
     this.state.active = false;
     this.state.done = true;
     this.scene.remove(this.plane.obj);
@@ -300,7 +358,7 @@ class LevelOne {
   }
 }
 
-import Level2Model from "./assets/models/level/rocky-level-real.glb";
+import Level2Model from "./assets/models/level/rocky-alien-level-3.glb";
 /**
  * Level class for handling level wide details
  * The cave level
@@ -328,7 +386,6 @@ class LevelTwo {
     this.light2 = new PointLight(0xffffaa, 0.7, 400);
     this.light2.position.set(5, 10, 7.5);
     this.light2.castShadow = true;
-    console.log(`this.light2`, this.light2);
     this.scene.add(this.light);
     this.scene.add(this.light2);
 
@@ -362,10 +419,9 @@ class LevelTwo {
           } else {
             mesh.castShadow = true;
           }
+          console.log(`mesh.layers`, mesh.layers);
         });
-        console.log(this.obj.position);
         this.obj.position.add(new Vector3(0, 0, 0));
-        console.log(this.obj);
         this.start();
       },
       (xhr) => {
@@ -397,6 +453,16 @@ class LevelTwo {
       this.end();
       return;
     }
+    let ufoSpeed = 12;
+    let objSpeed = 6;
+    this.obj.children.forEach((mesh) => {
+      if (
+        mesh.name.startsWith("ufo") &&
+        mesh.position.distanceTo(this.plane.obj.position) < 200
+      ) {
+        mesh.position.lerp(this.plane.obj.position, dt / 5);
+      }
+    });
 
     // Do collision logic
 
@@ -473,7 +539,6 @@ class Hud {
   show_tooltips(pos) {}
 
   update() {
-    // console.log('hi')
     this.clear();
     this.show_health_bar();
   }
@@ -497,7 +562,6 @@ export class Player {
 
   next_level() {
     this.state.health = 100;
-    console.log("not done");
     this.state.level = 2;
     this.level = new LevelTwo();
   }
@@ -529,7 +593,7 @@ const render = () => {
 };
 
 const animate = () => {
-  FRAME = requestAnimationFrame(animate);
+  FRAME = requestAnimationFrame(animate);  
   // controls.update();
   render();
 };
