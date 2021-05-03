@@ -13,6 +13,10 @@ import {
   Vector3,
   FogExp2,
   AmbientLight,
+  PlaneBufferGeometry,
+  MeshLambertMaterial,
+  BoxHelper,
+  Box3Helper,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { ConvexObjectBreaker } from "three/examples/jsm/misc/ConvexObjectBreaker";
@@ -34,6 +38,7 @@ renderer.setClearColor(0xffffff, 1);
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 
+let FRAME = 0;
 // clock for timing events
 const clock = new Clock();
 // attach the render to the dom
@@ -54,7 +59,7 @@ const composer = new EffectComposer(renderer);
 camera.position.set(0, 0, 0);
 camera.lookAt(0, 0, -1000);
 
-import PlaneModel from "./assets/models/airplane/Enemy_Plane.glb";
+import PlaneModel from "./assets/models/airplane/Enemy_Plane2.glb";
 import BulletModel from "./assets/models/bullet/bullet.glb";
 
 /**
@@ -83,7 +88,7 @@ class Plane {
         this.animations = gltf.animations;
         this.obj = object.clone();
         this.obj.position.copy(this.position);
-        this.obj.rotateY(Math.PI);
+        // this.obj.rotateY(Math.PI);
         this.aR.copy(this.obj.quaternion);
         this.start();
       },
@@ -111,7 +116,6 @@ class Plane {
   }
 
   start() {
-    console.log(this.animations);
     this.mixer = new AnimationMixer(this.obj);
     const clips = this.animations || [];
     clips.forEach((clip) => {
@@ -120,6 +124,8 @@ class Plane {
       }
     });
     this.state.active = true;
+    const box = new BoxHelper(this.obj.children[0].children[1], 0xffff00);
+    this.parent.add(box);
     this.parent.add(this.obj);
   }
 
@@ -141,28 +147,28 @@ class Plane {
     let suc = 0;
     if (keys["ArrowLeft"]) {
       suc = 1;
-      this.obj.translateX(dx);
-      this.obj.rotateZ(-0.01);
+      this.obj.translateX(-dx);
+      this.obj.rotateZ(0.03);
     }
     if (keys["ArrowUp"]) {
       suc = 1;
       this.obj.translateY(dy);
-      this.obj.rotateX(0.03);
+      this.obj.rotateX(-0.03);
     }
     if (keys["ArrowRight"]) {
       suc = 1;
-      this.obj.translateX(-dx);
-      this.obj.rotateZ(0.01);
+      this.obj.translateX(dx);
+      this.obj.rotateZ(-0.03);
     }
     if (keys["ArrowDown"]) {
       suc = 1;
       this.obj.translateY(-dy);
-      this.obj.rotateX(-0.03);
+      this.obj.rotateX(0.03);
     }
     if (!suc) {
       this.obj.quaternion.slerp(this.aR, 0.05);
     }
-    this.obj.translateZ(dz);
+    this.obj.translateZ(-dz);
   }
 
   update(dt) {
@@ -170,7 +176,7 @@ class Plane {
   }
 }
 
-import Level1Model from "./assets/models/level/rainbow_road.glb";
+import Level1Model from "./assets/models/level/rainbow_road4.glb";
 
 /**
  * Level class for handling level wide details
@@ -182,6 +188,7 @@ class LevelOne {
     // states ['unloaded', 'normal', 'shoot']
     this.state = {
       active: false,
+      done: false,
     };
 
     // Renderer settings
@@ -192,13 +199,13 @@ class LevelOne {
     this.scene.fog = fog;
 
     // Lighting for the scene
-    this.light = new AmbientLight(0xffffff, 0.7); // soft white light
-    this.light2 = new PointLight(0xffffff, 0.7, 400);
-    this.light3 = new DirectionalLight(0xffffff, 40)
-    this.light3.position.set(0,0,-2000)
-    this.light2.position.set(5, 10, 7.5);
+    this.light = new AmbientLight(0xffffff, 1); // soft white light
+    // this.light2 = new PointLight(0xffffff, 0.7, 400);
+    this.light3 = new DirectionalLight(0xffffff, 40);
+    this.light3.position.set(0, 0, -2000);
+    // this.light2.position.set(5, 10, 7.5);
     this.scene.add(this.light);
-    this.scene.add(this.light2);
+    // this.scene.add(this.light2);
 
     // composer settings
     this.renderPass = new RenderPass(this.scene, camera);
@@ -216,6 +223,8 @@ class LevelOne {
       new Vector3(0, 0, 0),
       new Vector3(12, 12, 48)
     );
+
+    this.update.bind(this);
   }
 
   load() {
@@ -225,20 +234,8 @@ class LevelOne {
       (gltf) => {
         const group = gltf.scene || gltf.scenes[0];
         this.obj = group.clone();
-        this.obj.position.add(new Vector3(0, 0, -1000));
+        // this.obj.position.add(new Vector3(0, 0, -1000));
         console.log(this.obj);
-        this.obj.children.forEach((mesh) => {
-          if (mesh.name.startsWith("battery")) {
-            let mixer = new AnimationMixer(mesh);
-            const clips = mesh.animations || [];
-            console.log('clips :>> ', clips);
-            clips.forEach((clip) => {
-              mixer.clipAction(clip).reset().play();
-            });
-          } else {
-            mesh.castShadow = true;
-          }
-        });
         this.start();
       },
       (xhr) => {
@@ -252,13 +249,37 @@ class LevelOne {
 
   start() {
     this.state.active = true;
+    console.log(`this.obj`, this.obj)
     // I would want to defer this so as to save memory
     this.scene.add(this.obj);
   }
 
   update(dt) {
+    if (!this.state.active) {
+      return;
+    }
+
     // Update plane postion and rotation
     this.plane.update(dt);
+    if (this.plane.state.active && this.plane.obj.position.z <= -2000) {
+      this.end();
+      return;
+    }
+    // Update the objects position
+    let ufoSpeed = 12; 
+    let objSpeed = 6;
+    this.obj.children.forEach((mesh) => {
+      if (!mesh.name.startsWith("battery") && mesh.name != "tunnel") {
+        if (
+          mesh.name.startsWith("ufo") &&
+          mesh.position.distanceTo(this.plane.obj.position) < 300
+        ) {
+          mesh.position.lerp(this.plane.obj.position, dt/ 4);
+        } else if (mesh.name !== 'Plane') {
+          mesh.position.add(new Vector3(0, 0, dt * objSpeed));
+        }
+      }
+    });
 
     // Do collision logic
 
@@ -269,9 +290,11 @@ class LevelOne {
   }
 
   end() {
+    console.log("hi");
     this.state.active = false;
-    this.plane.obj.dispose();
-    this.obj.dispose();
+    this.state.done = true;
+    this.scene.remove(this.plane.obj);
+    this.scene.remove(this.obj);
     composer.removePass(this.glitchPass);
     composer.removePass(this.renderPass);
   }
@@ -288,28 +311,32 @@ class LevelTwo {
     // states ['unloaded', 'normal', 'shoot']
     this.state = {
       active: false,
+      done: false,
     };
 
     // Renderer settings
+    renderer.setClearColor(0x000000, 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
 
-    // Fog effect so that farther things are not seen
-    const fog = new FogExp2(0x0a0a0a, 0.3); // dark shadow
+    // // Fog effect so that farther things are not seen
+    const fog = new FogExp2(0x0a0a0a, 0.003); // dark shadow
     this.scene.fog = fog;
 
     // Lighting for the scene
     this.light = new AmbientLight(0xffffff, 0.03); // soft white light
-    this.light2 = new PointLight(0x4f4f4f, 0.7, 400);
+    this.light2 = new PointLight(0xffffaa, 0.7, 400);
     this.light2.position.set(5, 10, 7.5);
+    this.light2.castShadow = true;
+    console.log(`this.light2`, this.light2);
     this.scene.add(this.light);
     this.scene.add(this.light2);
 
     // composer settings
     this.renderPass = new RenderPass(this.scene, camera);
     composer.addPass(this.renderPass);
-    this.outlinePass = new OutlinePass();
-    composer.addPass(this.outlinePass);
+    // this.outlinePass = new OutlinePass();
+    // composer.addPass(this.outlinePass);
 
     // Load the the model
     this.load();
@@ -336,7 +363,8 @@ class LevelTwo {
             mesh.castShadow = true;
           }
         });
-        this.obj.position.add(new Vector3(0, 0, -1000));
+        console.log(this.obj.position);
+        this.obj.position.add(new Vector3(0, 0, 0));
         console.log(this.obj);
         this.start();
       },
@@ -352,12 +380,23 @@ class LevelTwo {
   start() {
     this.state.active = true;
     // I would want to defer this so as to save memory
-    this.parent.add(this.obj);
+    this.scene.add(this.obj);
   }
 
   update(dt) {
+    if (!this.state.active) {
+      return;
+    }
     // Update plane postion and rotation
     this.plane.update(dt);
+    this.light2.position.addVectors(
+      this.plane.obj.position,
+      new Vector3(0, 1, 0)
+    );
+    if (this.plane.state.active && this.plane.obj.position.z <= -2000) {
+      this.end();
+      return;
+    }
 
     // Do collision logic
 
@@ -369,9 +408,10 @@ class LevelTwo {
 
   end() {
     this.state.active = false;
-    this.plane.obj.dispose();
-    this.obj.dispose();
-    composer.removePass(this.outlinePass);
+    this.state.done = true;
+    this.scene.remove(this.plane.obj);
+    this.scene.remove(this.obj);
+    // composer.removePass(this.outlinePass);
     composer.removePass(this.renderPass);
   }
 }
@@ -379,9 +419,8 @@ class LevelTwo {
 import "./styles/main.css";
 
 class Hud {
-
   constructor(canvas, player) {
-    console.log('player :>> ', player);
+    console.log("player :>> ", player);
     this.hud = document.createElement("canvas");
     this.hud.style.zIndex = 10;
     this.hud.style.position = "absolute";
@@ -390,8 +429,6 @@ class Hud {
     this.hud.width = canvas.width;
     this.hud.height = canvas.height;
     this.ctx = this.hud.getContext("2d");
-    this.hud.setAttribute('id', 'hud')
-    console.log('this.hud :>> ', this.hud);
     this.player = player;
     // this.ctx.font = "30px Comic Sans MS";
     // this.ctx.fillStyle = "red";
@@ -445,6 +482,7 @@ class Hud {
 export class Player {
   constructor() {
     this.state = {
+      level: 1,
       active: false,
       health: 100,
       bullets: 0,
@@ -453,36 +491,45 @@ export class Player {
   }
 
   start() {
-    this.state.active = true
+    this.state.active = true;
     this.level = new LevelOne();
   }
 
   next_level() {
+    this.state.health = 100;
+    console.log("not done");
+    this.state.level = 2;
     this.level = new LevelTwo();
   }
 
   update() {
-    this.state.health -= 0.05
-    this.state.health = Math.max(this.state.health, 0)
+    this.state.health -= 0.05;
+    this.state.health = Math.max(this.state.health, 0);
+    if (this.level.state.done) {
+      if (this.state.level === 1) {
+        this.next_level();
+      } else {
+        cancelAnimationFrame(FRAME);
+      }
+    }
   }
 }
 
 const player = new Player();
-player.start()
+player.start();
 const hud = new Hud(renderer.domElement, player);
-
 
 const render = () => {
   const dt = clock.getDelta();
   if (player.state.active) {
     player.level.update(dt);
   }
-  player.update()
+  player.update();
   composer.render(player.level.scene, camera);
 };
 
 const animate = () => {
-  requestAnimationFrame(animate);
+  FRAME = requestAnimationFrame(animate);
   // controls.update();
   render();
 };
