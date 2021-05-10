@@ -35,8 +35,14 @@ module.exports = {
       },
       // MODELS
       {
-        test: /\.(bin|glb|gltf)$/,
+        test: /\.(glb|gltf)$/,
         loader: "file-loader",
+        options: { esModule: false },
+        include: path.join(__dirname, "../src/assets"),
+      },
+      {
+        test: /\.(bin)$/,
+        loader: "raw-loader",
         options: { esModule: false },
         include: path.join(__dirname, "../src/assets"),
       },

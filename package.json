@@ -20,7 +20,9 @@
   "author": "kannav mehta",
   "license": "ISC",
   "dependencies": {
-    "eslint": "^7.23.0",
+    "ammo.js": "github:kripken/ammo.js",
+    "eslint": "^7.25.0",
+    "fs": "0.0.1-security",
     "three": "^0.127.0"
   },
   "devDependencies": {
